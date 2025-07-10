@@ -212,10 +212,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For support, email [your-email@example.com] or create an issue in this repository.
+For support, email ashiquegeorge15@gmail.com or create an issue in this repository.
 
 ---
 
-**Built with ❤️ for parish communities worldwide**
-
-![Made with Flutter](https://img.shields.io/badge/Made%20with-Flutter-blue?style=flat-square&logo=flutter)
+**Built with ❤️ for parish community**
