@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1039275246750",
+    "project_id": "backendlogsign",
+    "storage_bucket": "backendlogsign.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039275246750:android:ee61d0b254a2697a3e278f",
+        "android_client_info": {
+          "package_name": "com.example.parishoners_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1039275246750-example.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyqAiultYZzwcoRfQhNKRiCG3DuEBEsd8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1039275246750-example.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+} 
