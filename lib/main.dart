@@ -1,35 +1,16 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
-import 'screens/auth_screen.dart';
 import 'services/firebase_service.dart';
 import 'models/announcement.dart';
-import 'models/dues.dart';
-import 'models/event.dart';
 import 'screens/dues_screen.dart';
 import 'screens/members_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/gallery_screen.dart';
 import 'screens/profile_screen.dart';
-
-class CarouselItem {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final List<Color> gradient;
-
-  CarouselItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.gradient,
-  });
-}
+import 'screens/admin_login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,18 +53,11 @@ class ParishonersApp extends StatelessWidget {
           surface: Colors.white,
         ),
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-        fontFamily: GoogleFonts.inter().fontFamily,
-        textTheme: GoogleFonts.interTextTheme(),
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF1976D2),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1976D2),
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: true,
-          titleTextStyle: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
         ),
         cardTheme: CardThemeData(
           elevation: 8,
@@ -103,10 +77,6 @@ class ParishonersApp extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            textStyle: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ),
         useMaterial3: true,
@@ -116,76 +86,8 @@ class ParishonersApp extends StatelessWidget {
   }
 }
 
-class DashboardPage extends StatefulWidget {
+class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
-
-  @override
-  State<DashboardPage> createState() => _DashboardPageState();
-}
-
-class _DashboardPageState extends State<DashboardPage> {
-  late PageController _pageController;
-  late Timer _timer;
-  int _currentPage = 0;
-
-  final List<CarouselItem> _carouselItems = [
-    CarouselItem(
-      title: "Welcome to Our Parish",
-      subtitle: "Building community through faith and fellowship",
-      icon: Icons.church,
-      gradient: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-    ),
-    CarouselItem(
-      title: "Stay Connected",
-      subtitle: "Never miss important announcements and events",
-      icon: Icons.notifications_active,
-      gradient: [Color(0xFF4CAF50), Color(0xFF81C784)],
-    ),
-    CarouselItem(
-      title: "Community Directory",
-      subtitle: "Connect with fellow parishioners",
-      icon: Icons.people,
-      gradient: [Color(0xFF9C27B0), Color(0xFFBA68C8)],
-    ),
-    CarouselItem(
-      title: "Manage Your Dues",
-      subtitle: "Easy payment tracking and history",
-      icon: Icons.account_balance_wallet,
-      gradient: [Color(0xFFFF9800), Color(0xFFFFB74D)],
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-    _startAutoScroll();
-  }
-
-  void _startAutoScroll() {
-    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_currentPage < _carouselItems.length - 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
-      
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          _currentPage,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOutCubic,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +113,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildCarousel(),
+                    _buildWelcomeSection(),
                     const SizedBox(height: 32),
                     _buildDashboardGrid(context),
                   ],
@@ -279,6 +181,9 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       actions: [
         _buildGlassButton(Icons.notifications_outlined, () {}),
+        _buildGlassButton(Icons.admin_panel_settings_outlined, () {
+          _navigateToAdminLogin(context);
+        }),
         _buildGlassButton(Icons.account_circle_outlined, () {
           _navigateToModule(context, 'Profile');
         }),
@@ -315,10 +220,18 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildCarousel() {
+  Widget _buildWelcomeSection() {
     return Container(
-      height: 180,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.9),
+            Colors.white.withOpacity(0.7),
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -334,104 +247,48 @@ class _DashboardPageState extends State<DashboardPage> {
             offset: const Offset(0, -4),
           ),
         ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentPage = index;
-                });
-              },
-              itemCount: _carouselItems.length,
-              itemBuilder: (context, index) {
-                final item = _carouselItems[index];
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: item.gradient,
+        border: Border.all(
+          color: Colors.white.withOpacity(0.6),
+          width: 1,
         ),
       ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Row(
-                      children: [
-                        Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
         children: [
-                              Text(
-                                item.title,
-                                style: GoogleFonts.inter(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                item.subtitle,
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w400,
-                                  color: Colors.white.withOpacity(0.9),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF1976D2).withOpacity(0.1),
+                  const Color(0xFF42A5F5).withOpacity(0.1),
+                ],
+              ),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                color: const Color(0xFF1976D2).withOpacity(0.2),
                 width: 1,
               ),
             ),
-                          child: Icon(
-                            item.icon,
-                            size: 40,
-                            color: Colors.white,
-                          ),
+            child: const Text(
+              '✨ Welcome back!',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1976D2),
               ),
-                      ],
             ),
           ),
-                );
-              },
-            ),
-            // Page indicators
-            Positioned(
-              bottom: 16,
-              left: 24,
-              child: Row(
-                children: List.generate(
-                  _carouselItems.length,
-                  (index) => Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    width: _currentPage == index ? 24 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _currentPage == index 
-                          ? Colors.white 
-                          : Colors.white.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
+          const SizedBox(height: 12),
+          Text(
+            'Manage your parish community with style',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
-        ),
       ),
     );
   }
@@ -602,6 +459,30 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _navigateToAdminLogin(BuildContext context) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const AdminLoginScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, -1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOutCubic;
+
+          var tween = Tween(begin: begin, end: end).chain(
+            CurveTween(curve: curve),
+          );
+
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
   void _navigateToModule(BuildContext context, String moduleName) {
     if (moduleName == 'Members') {
       // Navigate directly to standalone Members page
@@ -693,27 +574,27 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       );
     } else {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            ModulePage(moduleName: moduleName),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(1.0, 0.0);
-          const end = Offset.zero;
-          const curve = Curves.easeInOutCubic;
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              ModulePage(moduleName: moduleName),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
 
-          var tween = Tween(begin: begin, end: end).chain(
-            CurveTween(curve: curve),
-          );
+            var tween = Tween(begin: begin, end: end).chain(
+              CurveTween(curve: curve),
+            );
 
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
-        },
-      ),
-    );
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+        ),
+      );
     }
   }
 }
@@ -863,24 +744,24 @@ class ModulePage extends StatelessWidget {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(50.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   CircularProgressIndicator(
                     color: Color(0xFF1976D2),
-                      ),
+                  ),
                   SizedBox(height: 16),
-                      Text(
+                  Text(
                     'Loading announcements...',
-                        style: TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-          ),
-        );
+                ],
+              ),
+            ),
+          );
         }
 
         if (snapshot.hasError) {
@@ -909,51 +790,51 @@ class ModulePage extends StatelessWidget {
                     'Please try again later',
                     style: TextStyle(
                       fontSize: 14,
-              color: Colors.grey[600],
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-              ],
-            ),
-      ),
-    );
-  }
+          );
+        }
 
         final announcements = snapshot.data ?? [];
 
         if (announcements.isEmpty) {
-    return const Center(
+          return const Center(
             child: Padding(
               padding: EdgeInsets.all(50.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
                     Icons.campaign_outlined,
-            size: 64,
+                    size: 64,
                     color: Colors.grey,
-          ),
-          SizedBox(height: 16),
-          Text(
+                  ),
+                  SizedBox(height: 16),
+                  Text(
                     'No announcements',
-            style: TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
-              fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                       color: Colors.grey,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
                     'Check back later for updates',
-            style: TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ],
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
               ),
-      ),
-    );
-  }
+            ),
+          );
+        }
 
         return ListView.builder(
           shrinkWrap: true,
@@ -1013,72 +894,72 @@ class ModulePage extends StatelessWidget {
               children: [
                 // Header row with icon and title
                 Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        color.withOpacity(0.15),
-                        color.withOpacity(0.05),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                    border: Border.all(
-                      color: color.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                      child: const Icon(Icons.campaign_outlined, color: color, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                            announcement.title,
-                        style: const TextStyle(
-                              fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2C3E50),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            color.withOpacity(0.15),
+                            color.withOpacity(0.05),
+                          ],
                         ),
-                      ),
-                          const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
                             color: color.withOpacity(0.2),
-                            width: 1,
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
-                        child: Text(
-                              announcement.formattedDateTime,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        ],
+                        border: Border.all(
+                          color: color.withOpacity(0.3),
+                          width: 1,
                         ),
                       ),
-                    ],
-                  ),
+                      child: const Icon(Icons.campaign_outlined, color: color, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            announcement.title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2C3E50),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: color.withOpacity(0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              announcement.formattedDateTime,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
                 const SizedBox(height: 16),
                 
                 // Content
@@ -1175,9 +1056,9 @@ class ModulePage extends StatelessWidget {
             Text(
               attachment.fileSizeFormatted,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
-        ),
+            ),
           ],
-      ),
+        ),
       ],
     );
   }
@@ -1186,31 +1067,31 @@ class ModulePage extends StatelessWidget {
     return InkWell(
       onTap: () => _launchURL(attachment.downloadURL),
       borderRadius: BorderRadius.circular(8),
-          child: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Container(
+        child: Row(
+          children: [
+            Container(
               padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: Colors.red[50],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 24),
-                ),
+            ),
             const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     attachment.fileName,
-                        style: const TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
-                      ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     attachment.fileSizeFormatted,
@@ -1242,18 +1123,18 @@ class ModulePage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.blue[50],
                 borderRadius: BorderRadius.circular(8),
-                          ),
+              ),
               child: const Icon(Icons.attach_file, color: Colors.blue, size: 24),
-                      ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                      Text(
+                  Text(
                     attachment.fileName,
                     style: const TextStyle(
-                          fontSize: 14,
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -1263,14 +1144,14 @@ class ModulePage extends StatelessWidget {
                     attachment.fileSizeFormatted,
                     style: TextStyle(
                       fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
+                      color: Colors.grey[600],
+                    ),
                   ),
-                ),
+                ],
+              ),
+            ),
             const Icon(Icons.open_in_new, color: Colors.grey, size: 16),
-              ],
+          ],
         ),
       ),
     );
@@ -1310,8 +1191,8 @@ class ModulePage extends StatelessWidget {
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1976D2),
+            ),
           ),
-        ),
           SizedBox(height: 8),
           Text(
             'This feature is under development',
@@ -1336,4 +1217,4 @@ class ModulePage extends StatelessWidget {
       ),
     );
   }
-}
+} 
