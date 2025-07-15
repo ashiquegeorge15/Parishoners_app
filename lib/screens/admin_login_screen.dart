@@ -118,10 +118,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
         setState(() {
           _errorMessage = result.message;
         });
-        
-        if (result.isPendingApproval) {
-          _showPendingApprovalDialog();
-        }
       }
     } catch (error) {
       print('Login error: $error');

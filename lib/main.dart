@@ -574,27 +574,27 @@ class DashboardPage extends StatelessWidget {
         ),
       );
     } else {
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              ModulePage(moduleName: moduleName),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0);
-            const end = Offset.zero;
-            const curve = Curves.easeInOutCubic;
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ModulePage(moduleName: moduleName),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOutCubic;
 
-            var tween = Tween(begin: begin, end: end).chain(
-              CurveTween(curve: curve),
-            );
+          var tween = Tween(begin: begin, end: end).chain(
+            CurveTween(curve: curve),
+          );
 
-            return SlideTransition(
-              position: animation.drive(tween),
-              child: child,
-            );
-          },
-        ),
-      );
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
     }
   }
 }
@@ -744,24 +744,24 @@ class ModulePage extends StatelessWidget {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(50.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                   CircularProgressIndicator(
                     color: Color(0xFF1976D2),
-                  ),
+                      ),
                   SizedBox(height: 16),
-                  Text(
+                      Text(
                     'Loading announcements...',
-                    style: TextStyle(
+                        style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey,
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          );
+          ),
+        );
         }
 
         if (snapshot.hasError) {
@@ -790,51 +790,51 @@ class ModulePage extends StatelessWidget {
                     'Please try again later',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
+              color: Colors.grey[600],
             ),
-          );
-        }
+          ),
+              ],
+            ),
+      ),
+    );
+  }
 
         final announcements = snapshot.data ?? [];
 
         if (announcements.isEmpty) {
-          return const Center(
+    return const Center(
             child: Padding(
               padding: EdgeInsets.all(50.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
                     Icons.campaign_outlined,
-                    size: 64,
+            size: 64,
                     color: Colors.grey,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
+          ),
+          SizedBox(height: 16),
+          Text(
                     'No announcements',
-                    style: TextStyle(
+            style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.bold,
                       color: Colors.grey,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Check back later for updates',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
             ),
-          );
-        }
+          ),
+          SizedBox(height: 8),
+          Text(
+                    'Check back later for updates',
+            style: TextStyle(
+                      fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+        ],
+              ),
+      ),
+    );
+  }
 
         return ListView.builder(
           shrinkWrap: true,
@@ -894,72 +894,72 @@ class ModulePage extends StatelessWidget {
               children: [
                 // Header row with icon and title
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            color.withOpacity(0.15),
-                            color.withOpacity(0.05),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                        border: Border.all(
-                          color: color.withOpacity(0.3),
-                          width: 1,
-                        ),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        color.withOpacity(0.15),
+                        color.withOpacity(0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
+                    ],
+                    border: Border.all(
+                      color: color.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
                       child: const Icon(Icons.campaign_outlined, color: color, size: 24),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            announcement.title,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2C3E50),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: color.withOpacity(0.2),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              announcement.formattedDateTime,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                            announcement.title,
+                        style: const TextStyle(
+                              fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2C3E50),
+                        ),
+                      ),
+                          const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: color.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                              announcement.formattedDateTime,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
                 const SizedBox(height: 16),
                 
                 // Content
@@ -1056,9 +1056,9 @@ class ModulePage extends StatelessWidget {
             Text(
               attachment.fileSizeFormatted,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
         ),
+          ],
+      ),
       ],
     );
   }
@@ -1067,31 +1067,31 @@ class ModulePage extends StatelessWidget {
     return InkWell(
       onTap: () => _launchURL(attachment.downloadURL),
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
+          child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Row(
-          children: [
-            Container(
+            child: Row(
+              children: [
+                Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                 color: Colors.red[50],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 24),
-            ),
+                ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                     attachment.fileName,
-                    style: const TextStyle(
+                        style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
-                  ),
+                      ),
                   const SizedBox(height: 2),
                   Text(
                     attachment.fileSizeFormatted,
@@ -1123,18 +1123,18 @@ class ModulePage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.blue[50],
                 borderRadius: BorderRadius.circular(8),
-              ),
+                          ),
               child: const Icon(Icons.attach_file, color: Colors.blue, size: 24),
-            ),
+                      ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                      Text(
                     attachment.fileName,
                     style: const TextStyle(
-                      fontSize: 14,
+                          fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -1144,14 +1144,14 @@ class ModulePage extends StatelessWidget {
                     attachment.fileSizeFormatted,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
             const Icon(Icons.open_in_new, color: Colors.grey, size: 16),
-          ],
+              ],
         ),
       ),
     );
@@ -1191,8 +1191,8 @@ class ModulePage extends StatelessWidget {
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1976D2),
-            ),
           ),
+        ),
           SizedBox(height: 8),
           Text(
             'This feature is under development',
@@ -1217,4 +1217,4 @@ class ModulePage extends StatelessWidget {
       ),
     );
   }
-} 
+}

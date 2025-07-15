@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
 import '../main.dart';
+import '../models/event.dart';
 import 'user_management_screen.dart';
 import 'announcements_management_screen.dart';
 
@@ -17,6 +19,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   late TabController _tabController;
   Map<String, dynamic> _dashboardStats = {};
   bool _isLoadingStats = true;
+  
+  // Dues management state
+  String _duesSearchQuery = '';
+  bool _showOnlyMembersWithDues = false;
 
   @override
   void initState() {
@@ -417,10 +423,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
         tabs: const [
-          Tab(text: 'Pending', icon: Icon(Icons.pending_actions, size: 14)),
           Tab(text: 'Users', icon: Icon(Icons.people, size: 14)),
+          Tab(text: 'Events', icon: Icon(Icons.event, size: 14)),
           Tab(text: 'Dues', icon: Icon(Icons.payment, size: 14)),
-          Tab(text: 'Messages', icon: Icon(Icons.message, size: 14)),
+          Tab(text: 'Pending', icon: Icon(Icons.schedule, size: 14)),
           Tab(text: 'Actions', icon: Icon(Icons.settings, size: 14)),
         ],
       ),
@@ -433,189 +439,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       child: TabBarView(
         controller: _tabController,
         children: [
-          _buildPendingApprovalTab(),
           _buildUsersTab(),
+          _buildEventsTab(),
           _buildDuesTab(),
-          _buildMessagesTab(),
+          _buildPendingApprovalTab(),
           _buildActionsTab(),
         ],
       ),
     );
   }
 
-  Widget _buildPendingApprovalTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: FirebaseService.getPendingAccessRequests(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                const Text(
-                  'Error Loading Requests',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text('${snapshot.error}'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => setState(() {}),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final pendingRequests = snapshot.data ?? [];
-
-        if (pendingRequests.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, size: 64, color: Colors.green),
-                SizedBox(height: 16),
-                Text(
-                  'No Pending Requests',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text('All users have been processed'),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          itemCount: pendingRequests.length,
-          itemBuilder: (context, index) {
-            try {
-              if (index < 0 || index >= pendingRequests.length || pendingRequests.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              final request = pendingRequests[index];
-              if (request == null) {
-                return const SizedBox.shrink();
-              }
-              return _buildPendingRequestCard(request);
-            } catch (e) {
-              print('Error building pending request at index $index: $e');
-              return const SizedBox.shrink();
-            }
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildPendingRequestCard(Map<String, dynamic> request) {
-    if (request.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.person_add, color: Colors.orange),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      request['displayName']?.toString() ?? 'Unknown User',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      request['email']?.toString() ?? '',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Flexible(
-                flex: 1,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: request['id'] != null ? () => _approveUser(request['id']) : null,
-                    icon: const Icon(Icons.check, size: 16),
-                    label: const Text('Approve'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                flex: 1,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: request['id'] != null ? () => _rejectUser(request['id']) : null,
-                    icon: const Icon(Icons.close, size: 16),
-                    label: const Text('Reject'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildUsersTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
@@ -704,10 +538,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       return const SizedBox.shrink();
     }
     
-    final isApproved = user['isApproved'] ?? false;
     final isActive = user['isActive'] ?? true;
     final userName = user['name']?.toString() ?? user['email']?.toString() ?? 'Unknown';
     final userEmail = user['email']?.toString() ?? '';
+    final userRole = user['role']?.toString() ?? 'Member';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -727,7 +561,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: isApproved ? Colors.green : Colors.orange,
+            backgroundColor: const Color(0xFF1976D2),
             child: Text(
               userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -752,13 +586,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: isApproved ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+              color: const Color(0xFF1976D2).withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              isApproved ? 'Approved' : 'Pending',
-              style: TextStyle(
-                color: isApproved ? Colors.green : Colors.orange,
+              userRole,
+              style: const TextStyle(
+                color: Color(0xFF1976D2),
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
@@ -770,11 +604,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Widget _buildDuesTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: FirebaseService.getAllUsersAndMembers(),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: FirebaseService.getMembersWithDues(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF1976D2)),
+                SizedBox(height: 16),
+                Text('Loading dues information...'),
+              ],
+            ),
+          );
         }
 
         if (snapshot.hasError) {
@@ -785,7 +628,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
                 const Text(
-                  'Error Loading Members',
+                  'Error Loading Dues',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text('${snapshot.error}'),
@@ -799,28 +642,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
         }
 
-        final members = snapshot.data ?? [];
-
-        if (members.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'No Members Found',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text('No registered members yet'),
-              ],
-            ),
-          );
-        }
+        final allMembers = snapshot.data ?? [];
+        final membersWithDues = allMembers.where((member) => 
+          (member['outstandingDues'] as double) > 0).toList();
 
         return Column(
           children: [
-            // Search and filter bar
+            // Statistics cards
+            _buildDuesStatisticsCards(allMembers),
+            const SizedBox(height: 16),
+            
+            // Filter and search bar
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Row(
@@ -838,8 +670,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           ),
                         ],
                       ),
-                      child: const TextField(
-                        decoration: InputDecoration(
+                      child: TextField(
+                        onChanged: (value) => setState(() => _duesSearchQuery = value),
+                        decoration: const InputDecoration(
                           hintText: 'Search members...',
                           prefixIcon: Icon(Icons.search),
                           border: InputBorder.none,
@@ -849,39 +682,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: () => _showCreateDueDialog(),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create Due'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1976D2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  // Filter buttons
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ToggleButtons(
+                      borderRadius: BorderRadius.circular(12),
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('All'),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('With Dues'),
+                        ),
+                      ],
+                      isSelected: [!_showOnlyMembersWithDues, _showOnlyMembersWithDues],
+                      onPressed: (index) {
+                        setState(() {
+                          _showOnlyMembersWithDues = index == 1;
+                        });
+                      },
                     ),
                   ),
                 ],
               ),
             ),
+            
             // Members list
             Expanded(
-              child: ListView.builder(
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  try {
-                    if (index < 0 || index >= members.length || members.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    final member = members[index];
-                    if (member == null || member.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return _buildMemberDueCard(member);
-                  } catch (e) {
-                    print('Error building member card at index $index: $e');
-                    return const SizedBox.shrink();
-                  }
-                },
-              ),
+              child: _buildMembersList(allMembers),
             ),
           ],
         );
@@ -1050,6 +890,271 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDuesStatisticsCards(List<Map<String, dynamic>> allMembers) {
+    double totalOutstanding = 0;
+    double totalPaid = 0;
+    int membersWithDues = 0;
+    int totalDuesCount = 0;
+
+    for (var member in allMembers) {
+      final duesHistory = member['duesHistory'] as List? ?? [];
+      bool hasUnpaidDues = false;
+
+      for (var dues in duesHistory) {
+        totalDuesCount++;
+        final amount = (dues['amount'] as num?)?.toDouble() ?? 0;
+
+        if (dues['status'] == 'paid') {
+          totalPaid += amount;
+        } else {
+          totalOutstanding += amount;
+          hasUnpaidDues = true;
+        }
+      }
+
+      if (hasUnpaidDues) {
+        membersWithDues++;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildStatCard(
+              'Outstanding',
+              '\$${totalOutstanding.toStringAsFixed(2)}',
+              Icons.schedule,
+              Colors.orange,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              'Paid',
+              '\$${totalPaid.toStringAsFixed(2)}',
+              Icons.check_circle,
+              Colors.green,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              'Members w/ Dues',
+              '$membersWithDues',
+              Icons.people,
+              Colors.blue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              'Total Entries',
+              '$totalDuesCount',
+              Icons.receipt,
+              Colors.purple,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildMembersList(List<Map<String, dynamic>> allMembers) {
+    // Filter members based on search query and dues filter
+    List<Map<String, dynamic>> filteredMembers = allMembers.where((member) {
+      // Search filter
+      if (_duesSearchQuery.isNotEmpty) {
+        final query = _duesSearchQuery.toLowerCase();
+        final name = (member['name'] as String).toLowerCase();
+        final email = (member['email'] as String).toLowerCase();
+        if (!name.contains(query) && !email.contains(query)) {
+          return false;
+        }
+      }
+
+      // Dues filter
+      if (_showOnlyMembersWithDues) {
+        return (member['outstandingDues'] as double) > 0;
+      }
+
+      return true;
+    }).toList();
+
+    if (filteredMembers.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _showOnlyMembersWithDues ? Icons.money_off : Icons.people_outline,
+              size: 64,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _showOnlyMembersWithDues ? 'No Members with Outstanding Dues' : 'No Members Found',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(_duesSearchQuery.isNotEmpty ? 'Try adjusting your search' : 'No registered members yet'),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: filteredMembers.length,
+      itemBuilder: (context, index) {
+        final member = filteredMembers[index];
+        return _buildEnhancedMemberDueCard(member);
+      },
+    );
+  }
+
+  Widget _buildEnhancedMemberDueCard(Map<String, dynamic> member) {
+    final memberName = member['name']?.toString() ?? 'Unknown';
+    final memberEmail = member['email']?.toString() ?? '';
+    final memberPhone = member['phone']?.toString() ?? '';
+    final memberId = member['id']?.toString() ?? '';
+    final outstandingDues = (member['outstandingDues'] as double?) ?? 0.0;
+    final duesHistory = member['duesHistory'] as List? ?? [];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Member header
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: outstandingDues > 0 ? Colors.orange[100] : const Color(0xFF1976D2).withOpacity(0.1),
+                child: Icon(
+                  outstandingDues > 0 ? Icons.schedule : Icons.person,
+                  color: outstandingDues > 0 ? Colors.orange : const Color(0xFF1976D2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      memberName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    Text(
+                      memberEmail,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                    if (memberPhone.isNotEmpty)
+                      Text(
+                        memberPhone,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (outstandingDues > 0) ...[
+                    Text(
+                      '\$${outstandingDues.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    const Text(
+                      'Outstanding',
+                      style: TextStyle(fontSize: 10, color: Colors.orange),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'No Dues',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Action buttons
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _showCreateDueDialogForMember(member),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Add Due'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _showDuesHistoryDialog(member),
+                  icon: const Icon(Icons.history, size: 16),
+                  label: const Text('History'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          // Recent dues preview
+          if (duesHistory.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            Text(
+              'Recent Dues (${duesHistory.length})',
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ...duesHistory.take(2).map((due) => _buildDueItem(due)),
+            if (duesHistory.length > 2)
+              TextButton(
+                onPressed: () => _showDuesHistoryDialog(member),
+                child: Text('View ${duesHistory.length - 2} more...'),
+              ),
+          ],
         ],
       ),
     );
@@ -1236,12 +1341,123 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
   }
 
-  Widget _buildMessagesTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: FirebaseService.getAdminMessages(),
+  void _showDuesHistoryDialog(Map<String, dynamic> member) {
+    final memberName = member['name']?.toString() ?? 'Unknown Member';
+    final duesHistory = member['duesHistory'] as List? ?? [];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Dues History: $memberName'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: duesHistory.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.history, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('No dues history found'),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: duesHistory.length,
+                  itemBuilder: (context, index) {
+                    final due = duesHistory[index];
+                    final description = due['description']?.toString() ?? 'No description';
+                    final amount = (due['amount'] as num?)?.toDouble() ?? 0.0;
+                    final status = due['status']?.toString() ?? 'unpaid';
+                    final dueDate = due['dueDate']?.toString() ?? '';
+                    final isPaid = status.toLowerCase() == 'paid';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: Icon(
+                          isPaid ? Icons.check_circle : Icons.schedule,
+                          color: isPaid ? Colors.green : Colors.orange,
+                        ),
+                        title: Text(description),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Amount: \$${amount.toStringAsFixed(2)}'),
+                            if (dueDate.isNotEmpty) Text('Due: $dueDate'),
+                          ],
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isPaid ? Colors.green : Colors.orange,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                isPaid ? 'Paid' : 'Unpaid',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (!isPaid)
+                              TextButton(
+                                onPressed: () async {
+                                  final success = await FirebaseService.markDuesAsPaid(
+                                    userId: member['id'],
+                                    duesIndex: index,
+                                  );
+                                  if (success && mounted) {
+                                    Navigator.pop(context);
+                                    setState(() {});
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Dues marked as paid'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: const Text('Mark Paid', style: TextStyle(fontSize: 10)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingApprovalTab() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: FirebaseService.getPendingApprovalRequests(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF1976D2)),
+                SizedBox(height: 16),
+                Text('Loading pending approvals...'),
+              ],
+            ),
+          );
         }
 
         if (snapshot.hasError) {
@@ -1252,7 +1468,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
                 const Text(
-                  'Error Loading Messages',
+                  'Error Loading Pending Approvals',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Text('${snapshot.error}'),
@@ -1266,65 +1482,391 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           );
         }
 
-        final messages = snapshot.data ?? [];
+        final pendingRequests = snapshot.data ?? [];
 
-        if (messages.isEmpty) {
+        if (pendingRequests.isEmpty) {
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.mail_outline, size: 64, color: Colors.grey),
+                Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
                 SizedBox(height: 16),
                 Text(
-                  'No Messages',
+                  'No Pending Approvals',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                Text('No support requests or messages'),
+                Text('All registration requests have been processed'),
               ],
             ),
           );
         }
 
-        return ListView.builder(
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            try {
-              if (index < 0 || index >= messages.length || messages.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              final message = messages[index];
-              if (message == null) {
-                return const SizedBox.shrink();
-              }
-              return _buildMessageCard(message);
-            } catch (e) {
-              print('Error building message at index $index: $e');
-              return const SizedBox.shrink();
-            }
-          },
+        return Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.schedule, color: Colors.orange),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Pending Approval Requests',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        Text(
+                          '${pendingRequests.length} users waiting for approval',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Pending requests list
+            Expanded(
+              child: ListView.builder(
+                itemCount: pendingRequests.length,
+                itemBuilder: (context, index) {
+                  final request = pendingRequests[index];
+                  return _buildPendingRequestCard(request);
+                },
+              ),
+            ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildMessageCard(Map<String, dynamic> message) {
-    if (message.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildPendingRequestCard(Map<String, dynamic> request) {
+    final name = request['name']?.toString() ?? 'Unknown';
+    final email = request['email']?.toString() ?? '';
+    final createdAt = request['createdAt'] as Timestamp?;
+    final collection = request['collection']?.toString() ?? 'users';
     
-    final isRead = message['status']?.toString() == 'read';
-    final subject = message['subject']?.toString() ?? 'No Subject';
-    final messageText = message['message']?.toString() ?? '';
-    final messageId = message['id']?.toString();
+    String timeAgo = 'Just now';
+    if (createdAt != null) {
+      final duration = DateTime.now().difference(createdAt.toDate());
+      if (duration.inDays > 0) {
+        timeAgo = '${duration.inDays} days ago';
+      } else if (duration.inHours > 0) {
+        timeAgo = '${duration.inHours} hours ago';
+      } else if (duration.inMinutes > 0) {
+        timeAgo = '${duration.inMinutes} minutes ago';
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isRead ? Colors.grey[50] : Colors.white,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.orange[100],
+                child: const Icon(Icons.person, color: Colors.orange),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'Requested $timeAgo',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'PENDING',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _approveUser(request['id'], collection),
+                  icon: const Icon(Icons.check, size: 16),
+                  label: const Text('Approve'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _rejectUser(request['id'], collection),
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Reject'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveUser(String userId, String collection) async {
+    try {
+      final success = await FirebaseService.approveUserAccess(userId, collection);
+      
+      if (success && mounted) {
+        setState(() {}); // Refresh the tab
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User approved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to approve user'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error approving user: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectUser(String userId, String collection) async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject User'),
+        content: const Text('Are you sure you want to reject this user? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final success = await FirebaseService.rejectUserAccess(userId, collection);
+      
+      if (success && mounted) {
+        setState(() {}); // Refresh the tab
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User rejected'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to reject user'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error rejecting user: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildEventsTab() {
+    return Column(
+      children: [
+        // Header with Add Event button
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Events Management',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showCreateEventDialog(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Event'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1976D2),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Events list
+        Expanded(
+          child: StreamBuilder<List<Event>>(
+            stream: FirebaseService.getEventsAsObjects(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Error Loading Events',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text('${snapshot.error}'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => setState(() {}),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final events = snapshot.data ?? [];
+
+              if (events.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.event_note, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'No Events',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text('Create your first event to get started'),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: events.length,
+                itemBuilder: (context, index) {
+                  final event = events[index];
+                  return _buildEventCard(event);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEventCard(Event event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isRead ? Colors.grey[200]! : const Color(0xFF1976D2).withOpacity(0.3),
+          color: const Color(0xFF1976D2).withOpacity(0.2),
         ),
         boxShadow: [
           BoxShadow(
@@ -1339,46 +1881,118 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           Row(
             children: [
-              Icon(
-                isRead ? Icons.mail_outline : Icons.mail,
-                color: isRead ? Colors.grey : const Color(0xFF1976D2),
-                size: 20,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(event.category).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _getCategoryIcon(event.category),
+                  color: _getCategoryColor(event.category),
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  subject,
-                  style: TextStyle(
-                    fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      event.categoryDisplayName,
+                      style: TextStyle(
+                        color: _getCategoryColor(event.category),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (!isRead && messageId != null)
-                GestureDetector(
-                  onTap: () => _markMessageAsRead(messageId),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1976D2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Mark Read',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      _showEditEventDialog(event);
+                      break;
+                    case 'delete':
+                      _showDeleteEventDialog(event);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 16),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
                     ),
                   ),
-                ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 16, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Delete', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            messageText,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 4),
+              Text(
+                event.formattedDateTime,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  event.location,
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (event.description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              event.description,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 14,
+                height: 1.3,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1481,29 +2095,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Future<void> _approveUser(String userId) async {
-    final success = await FirebaseService.approveUserAccess(userId);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'User approved successfully' : 'Failed to approve user'),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
-      );
-    }
-  }
 
-  Future<void> _rejectUser(String userId) async {
-    final success = await FirebaseService.rejectUserAccess(userId);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'User rejected successfully' : 'Failed to reject user'),
-          backgroundColor: success ? Colors.orange : Colors.red,
-        ),
-      );
-    }
-  }
 
   Future<void> _markMessageAsRead(String messageId) async {
     await FirebaseService.markMessageAsRead(messageId);
@@ -1596,5 +2188,285 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
       ),
     );
+  }
+
+  // Event management methods
+  void _showCreateEventDialog() {
+    _showEventDialog();
+  }
+
+  void _showEditEventDialog(Event event) {
+    _showEventDialog(event: event);
+  }
+
+  void _showEventDialog({Event? event}) {
+    final isEditing = event != null;
+    final titleController = TextEditingController(text: event?.title ?? '');
+    final descriptionController = TextEditingController(text: event?.description ?? '');
+    final locationController = TextEditingController(text: event?.location ?? '');
+    
+    DateTime selectedDate = event?.date ?? DateTime.now();
+    TimeOfDay? selectedTime = event?.time != null ? TimeOfDay.fromDateTime(event!.time!) : null;
+    bool isAllDay = event?.isAllDay ?? false;
+    String selectedCategory = event?.category ?? 'other';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(isEditing ? 'Edit Event' : 'Create Event'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Event Title',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Location',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'worship', child: Text('Worship')),
+                      DropdownMenuItem(value: 'community', child: Text('Community')),
+                      DropdownMenuItem(value: 'education', child: Text('Education')),
+                      DropdownMenuItem(value: 'meeting', child: Text('Meeting')),
+                      DropdownMenuItem(value: 'other', child: Text('Other')),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedCategory = value!;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDate,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (date != null) {
+                              setDialogState(() {
+                                selectedDate = date;
+                              });
+                            }
+                          },
+                          child: Text('Date: ${_formatDateShort(selectedDate)}'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  CheckboxListTile(
+                    title: const Text('All Day Event'),
+                    value: isAllDay,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isAllDay = value!;
+                        if (isAllDay) selectedTime = null;
+                      });
+                    },
+                  ),
+                  if (!isAllDay) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime ?? TimeOfDay.now(),
+                        );
+                        if (time != null) {
+                          setDialogState(() {
+                            selectedTime = time;
+                          });
+                        }
+                      },
+                      child: Text(selectedTime != null
+                          ? 'Time: ${selectedTime!.format(context)}'
+                          : 'Select Time'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.trim().isEmpty ||
+                    locationController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill all required fields')),
+                  );
+                  return;
+                }
+
+                DateTime? eventDateTime;
+                if (!isAllDay && selectedTime != null) {
+                  eventDateTime = DateTime(
+                    selectedDate.year,
+                    selectedDate.month,
+                    selectedDate.day,
+                    selectedTime!.hour,
+                    selectedTime!.minute,
+                  );
+                }
+
+                try {
+                  if (isEditing) {
+                    await FirebaseService.updateEvent(
+                      eventId: event!.id,
+                      title: titleController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      eventDate: selectedDate,
+                      location: locationController.text.trim(),
+                      eventTime: eventDateTime,
+                      isAllDay: isAllDay,
+                      category: selectedCategory,
+                    );
+                  } else {
+                    await FirebaseService.addEvent(
+                      title: titleController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      eventDate: selectedDate,
+                      location: locationController.text.trim(),
+                      eventTime: eventDateTime,
+                      isAllDay: isAllDay,
+                      category: selectedCategory,
+                    );
+                  }
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isEditing
+                            ? 'Event updated successfully'
+                            : 'Event created successfully'),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                }
+              },
+              child: Text(isEditing ? 'Update' : 'Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteEventDialog(Event event) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Event'),
+        content: Text('Are you sure you want to delete "${event.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await FirebaseService.deleteEvent(event.id);
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Event deleted successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting event: $e')),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper methods for event categories
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'worship':
+        return Colors.purple;
+      case 'community':
+        return Colors.green;
+      case 'education':
+        return Colors.blue;
+      case 'meeting':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'worship':
+        return Icons.church;
+      case 'community':
+        return Icons.people;
+      case 'education':
+        return Icons.school;
+      case 'meeting':
+        return Icons.meeting_room;
+      default:
+        return Icons.event;
+    }
+  }
+
+  String _formatDateShort(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 } 

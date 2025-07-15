@@ -12,8 +12,9 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  
   bool _isLoading = false;
-  bool _isSignUp = false;
+  bool _isSignInMode = true; // true for sign in, false for register
 
   @override
   void dispose() {
@@ -22,7 +23,7 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  Future<void> _handleAuth() async {
+  Future<void> _handleSignIn() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       _showSnackBar('Please fill in all fields');
       return;
@@ -33,36 +34,42 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     try {
-      UserCredential? result;
-      
-      if (_isSignUp) {
-        result = await FirebaseService.registerWithEmailAndPassword(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-      } else {
-        result = await FirebaseService.signInWithEmailAndPassword(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-      }
+      final result = await FirebaseService.signInWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
 
       if (result != null) {
-        _showSnackBar(_isSignUp 
-            ? 'Account created successfully!' 
-            : 'Signed in successfully!');
+        _showSnackBar('Signed in successfully!');
         
         // Navigate back to main app
         if (mounted) {
           Navigator.of(context).pop();
         }
       } else {
-        _showSnackBar(_isSignUp 
-            ? 'Failed to create account' 
-            : 'Failed to sign in');
+        _showSnackBar('Failed to sign in');
       }
     } catch (e) {
-      _showSnackBar('Error: ${e.toString()}');
+      String errorMessage = 'Sign in failed';
+      
+      if (e.toString().contains('PENDING_APPROVAL')) {
+        _showPendingApprovalDialog();
+        return;
+      } else if (e.toString().contains('ACCESS_DENIED')) {
+        errorMessage = 'Your access request has been denied. Please contact an administrator.';
+      } else if (e.toString().contains('user-not-found')) {
+        errorMessage = 'No account found with this email address. You can register to request access.';
+      } else if (e.toString().contains('wrong-password')) {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (e.toString().contains('too-many-requests')) {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else {
+        errorMessage = 'Sign in failed: ${e.toString()}';
+      }
+      
+      _showSnackBar(errorMessage);
     }
 
     setState(() {
@@ -75,6 +82,128 @@ class _AuthScreenState extends State<AuthScreen> {
       SnackBar(content: Text(message)),
     );
   }
+
+  void _showPendingApprovalDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.schedule, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Approval Pending'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your account is waiting for admin approval.',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'You will be able to access the app once an administrator approves your request.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRegister() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showSnackBar('Please fill in all fields');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userCredential = await FirebaseService.registerWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (userCredential != null) {
+        // Registration successful - show pending approval message
+        _showRegistrationSuccessDialog();
+      } else {
+        _showSnackBar('Registration failed');
+      }
+    } catch (e) {
+      String errorMessage = 'Registration failed';
+      
+      if (e.toString().contains('email-already-in-use')) {
+        errorMessage = 'An account with this email already exists. Try signing in instead.';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage = 'Password is too weak. Please choose a stronger password.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Please enter a valid email address.';
+      } else {
+        errorMessage = 'Registration failed: ${e.toString()}';
+      }
+      
+      _showSnackBar(errorMessage);
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  void _showRegistrationSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Registration Successful'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your account has been created successfully!',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Your account is now pending admin approval. You will be notified once approved.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context); // Go back to main app
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +240,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  _isSignUp ? 'Create Account' : 'Welcome Back',
+                  _isSignInMode ? 'Welcome Back' : 'Join Our Community',
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -120,9 +249,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isSignUp 
-                      ? 'Join the parish community'
-                      : 'Sign in to continue',
+                  _isSignInMode ? 'Sign in to continue' : 'Register to request access',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.grey[600],
@@ -190,12 +317,12 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // Sign In/Up Button
+                // Action Button (Sign In or Register)
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleAuth,
+                    onPressed: _isLoading ? null : (_isSignInMode ? _handleSignIn : _handleRegister),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1976D2),
                       foregroundColor: Colors.white,
@@ -208,7 +335,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                            _isSignUp ? 'Create Account' : 'Sign In',
+                            _isSignInMode ? 'Sign In' : 'Register',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -218,31 +345,63 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Toggle Sign Up/Sign In
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _isSignUp 
-                          ? 'Already have an account? '
-                          : "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey[600]),
+                // Toggle between Sign In and Register
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.blue[200]!,
+                      width: 1,
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isSignUp = !_isSignUp;
-                        });
-                      },
-                      child: Text(
-                        _isSignUp ? 'Sign In' : 'Sign Up',
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        _isSignInMode ? Icons.person_add_outlined : Icons.login_outlined,
+                        color: const Color(0xFF1976D2),
+                        size: 24,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isSignInMode ? 'Need an account?' : 'Already have an account?',
                         style: const TextStyle(
-                          color: Color(0xFF1976D2),
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: Color(0xFF1976D2),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isSignInMode = !_isSignInMode;
+                          });
+                        },
+                        child: Text(
+                          _isSignInMode ? 'Register for Access' : 'Sign In Instead',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1976D2),
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      if (!_isSignInMode) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Registration requires admin approval before you can access the app.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
 
                 // Back Button

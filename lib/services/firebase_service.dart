@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import '../models/announcement.dart';
 import '../models/dues.dart';
+import '../models/event.dart';
 import '../models/gallery.dart';
 import '../models/user_profile.dart';
 
@@ -19,28 +20,120 @@ class FirebaseService {
   static User? get currentUser => _auth.currentUser;
   static Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Sign in with email and password
+  // Sign in with email and password with approval check
   static Future<UserCredential?> signInWithEmailAndPassword(
       String email, String password) async {
     try {
-      return await _auth.signInWithEmailAndPassword(
+      final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+      
+      final user = userCredential.user;
+      if (user == null) return null;
+
+      // Check approval status in both collections
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      
+      final memberDoc = await _firestore
+          .collection('members')
+          .doc(user.uid)
+          .get();
+
+      // Check if user is approved
+      bool isApproved = false;
+      bool isPending = false;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        isApproved = userData['isApproved'] == true;
+        isPending = userData['isPending'] == true;
+        
+        // Update last login if approved
+        if (isApproved) {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .update({
+            'lastLogin': FieldValue.serverTimestamp(),
+          });
+        }
+      } else if (memberDoc.exists) {
+        final memberData = memberDoc.data()!;
+        isApproved = memberData['isApproved'] == true;
+        isPending = memberData['isPending'] == true;
+        
+        // Update last login if approved
+        if (isApproved) {
+          await _firestore
+              .collection('members')
+              .doc(user.uid)
+              .update({
+            'lastLogin': FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        // New user - create pending approval request
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'email': user.email,
+          'name': user.displayName ?? '',
+          'isApproved': false,
+          'isPending': true,
+          'createdAt': FieldValue.serverTimestamp(),
+          'uid': user.uid,
+        });
+        isPending = true;
+      }
+
+      if (!isApproved && isPending) {
+        // Sign out the user as they're not approved yet
+        await _auth.signOut();
+        throw Exception('PENDING_APPROVAL');
+      } else if (!isApproved) {
+        // User exists but not approved and not pending - rejected
+        await _auth.signOut();
+        throw Exception('ACCESS_DENIED');
+      }
+      
+      return userCredential;
     } catch (e) {
       print('Sign in error: $e');
-      return null;
+      rethrow;
     }
   }
 
-  // Register with email and password
+  // Register with email and password (creates user with pending approval status)
   static Future<UserCredential?> registerWithEmailAndPassword(
       String email, String password) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(
+      final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+      
+      final user = userCredential.user;
+      if (user == null) return null;
+
+      // Create user document with pending approval status
+      await _firestore.collection('users').doc(user.uid).set({
+        'email': user.email,
+        'name': user.displayName ?? '',
+        'isApproved': false,
+        'isPending': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'uid': user.uid,
+      });
+
+      // Sign out the user immediately since they need approval
+      await _auth.signOut();
+      
+      return userCredential;
     } catch (e) {
       print('Registration error: $e');
       return null;
@@ -88,19 +181,96 @@ class FirebaseService {
     required String description,
     required DateTime eventDate,
     required String location,
+    DateTime? eventTime,
+    bool isAllDay = false,
+    String category = 'other',
   }) async {
     try {
-      await _firestore.collection('events').add({
+      Map<String, dynamic> eventData = {
         'title': title,
         'description': description,
-        'eventDate': Timestamp.fromDate(eventDate),
+        'date': Timestamp.fromDate(eventDate),
         'location': location,
+        'isAllDay': isAllDay,
+        'category': category,
         'createdAt': FieldValue.serverTimestamp(),
         'isActive': true,
-      });
+      };
+      
+      if (eventTime != null && !isAllDay) {
+        eventData['time'] = Timestamp.fromDate(eventTime);
+      }
+      
+      await _firestore.collection('events').add(eventData);
     } catch (e) {
       print('Error adding event: $e');
+      rethrow;
     }
+  }
+
+  // Update event
+  static Future<void> updateEvent({
+    required String eventId,
+    required String title,
+    required String description,
+    required DateTime eventDate,
+    required String location,
+    DateTime? eventTime,
+    bool isAllDay = false,
+    String category = 'other',
+  }) async {
+    try {
+      Map<String, dynamic> eventData = {
+        'title': title,
+        'description': description,
+        'date': Timestamp.fromDate(eventDate),
+        'location': location,
+        'isAllDay': isAllDay,
+        'category': category,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (eventTime != null && !isAllDay) {
+        eventData['time'] = Timestamp.fromDate(eventTime);
+      } else {
+        eventData['time'] = null;
+      }
+      
+      await _firestore.collection('events').doc(eventId).update(eventData);
+    } catch (e) {
+      print('Error updating event: $e');
+      rethrow;
+    }
+  }
+
+  // Delete event
+  static Future<void> deleteEvent(String eventId) async {
+    try {
+      await _firestore.collection('events').doc(eventId).update({
+        'isActive': false,
+        'deletedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error deleting event: $e');
+      rethrow;
+    }
+  }
+
+  // Get events as Event objects
+  static Stream<List<Event>> getEventsAsObjects() {
+    return _firestore
+        .collection('events')
+        .snapshots()
+        .map((snapshot) {
+          final events = snapshot.docs
+              .where((doc) => doc.data()['isActive'] == true)
+              .map((doc) => Event.fromFirestore(doc.id, doc.data()))
+              .toList();
+          
+          // Sort events by date
+          events.sort((a, b) => a.date.compareTo(b.date));
+          return events;
+        });
   }
 
   // Get events
@@ -428,7 +598,7 @@ class FirebaseService {
       ..sort((a, b) => (b.paymentDate ?? b.dueDate).compareTo(a.paymentDate ?? a.dueDate));
   }
 
-  // Add a new due (for admin use)
+  // Add a new due to member's duesHistory (for admin use) - matching web implementation
   static Future<bool> addDue({
     required String userId,
     required String description,
@@ -437,17 +607,362 @@ class FirebaseService {
     String status = 'unpaid',
   }) async {
     try {
-      await _firestore.collection('dues').add({
-        'userId': userId,
-        'description': description,
+      // Create dues entry object similar to web version
+      final duesEntry = {
         'amount': amount,
-        'dueDate': Timestamp.fromDate(dueDate),
+        'description': description,
+        'dueDate': dueDate.toIso8601String(),
         'status': status,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      // First try to find the member in the members collection
+      final memberDoc = await _firestore.collection('members').doc(userId).get();
+      
+      if (memberDoc.exists) {
+        // Member exists in members collection
+        final memberData = memberDoc.data()!;
+        
+        if (memberData['duesHistory'] != null) {
+          // duesHistory exists, add to it
+          await _firestore.collection('members').doc(userId).update({
+            'duesHistory': FieldValue.arrayUnion([duesEntry])
+          });
+        } else {
+          // duesHistory doesn't exist, create it
+          await _firestore.collection('members').doc(userId).update({
+            'duesHistory': [duesEntry]
+          });
+        }
+      } else {
+        // Try users collection
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          
+          if (userData['duesHistory'] != null) {
+            // duesHistory exists, add to it
+            await _firestore.collection('users').doc(userId).update({
+              'duesHistory': FieldValue.arrayUnion([duesEntry])
+            });
+          } else {
+            // duesHistory doesn't exist, create it
+            await _firestore.collection('users').doc(userId).update({
+              'duesHistory': [duesEntry]
+            });
+          }
+        } else {
+          print('Member not found in any collection');
+          return false;
+        }
+      }
+      
       return true;
     } catch (error) {
       print('Error adding due: $error');
+      return false;
+    }
+  }
+
+  // Get all members with their dues (for admin dues management)
+  static Future<List<Map<String, dynamic>>> getMembersWithDues() async {
+    try {
+      List<Map<String, dynamic>> allMembers = [];
+      
+      // Get members from both collections
+      final membersSnapshot = await _firestore.collection('members').get();
+      final usersSnapshot = await _firestore.collection('users').get();
+      
+      // Process members collection
+      for (var doc in membersSnapshot.docs) {
+        final memberData = doc.data();
+        final duesHistory = memberData['duesHistory'] as List? ?? [];
+        
+        // Calculate outstanding dues
+        double outstandingDues = 0;
+        for (var dues in duesHistory) {
+          if (dues['status'] == 'unpaid' || dues['status'] == 'pending') {
+            outstandingDues += (dues['amount'] as num?)?.toDouble() ?? 0;
+          }
+        }
+        
+        allMembers.add({
+          'id': doc.id,
+          'name': memberData['name'] ?? 'Unknown',
+          'email': memberData['email'] ?? 'No Email',
+          'phone': memberData['phone'] ?? 'No Phone',
+          'duesHistory': duesHistory,
+          'outstandingDues': outstandingDues,
+          'collection': 'members',
+        });
+      }
+      
+      // Process users collection (only if not already in members)
+      for (var doc in usersSnapshot.docs) {
+        // Check if this user is already in members list
+        if (allMembers.any((member) => member['id'] == doc.id)) {
+          continue;
+        }
+        
+        final userData = doc.data();
+        final duesHistory = userData['duesHistory'] as List? ?? [];
+        
+        // Calculate outstanding dues
+        double outstandingDues = 0;
+        for (var dues in duesHistory) {
+          if (dues['status'] == 'unpaid' || dues['status'] == 'pending') {
+            outstandingDues += (dues['amount'] as num?)?.toDouble() ?? 0;
+          }
+        }
+        
+        allMembers.add({
+          'id': doc.id,
+          'name': userData['name'] ?? userData['displayName'] ?? 'Unknown',
+          'email': userData['email'] ?? 'No Email',
+          'phone': userData['phone'] ?? userData['phoneNumber'] ?? 'No Phone',
+          'duesHistory': duesHistory,
+          'outstandingDues': outstandingDues,
+          'collection': 'users',
+        });
+      }
+      
+      // Sort by name
+      allMembers.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      
+      return allMembers;
+    } catch (error) {
+      print('Error getting members with dues: $error');
+      return [];
+    }
+  }
+
+  // Mark dues as paid (update specific dues entry in member's duesHistory)
+  static Future<bool> markDuesAsPaid({
+    required String userId,
+    required int duesIndex,
+  }) async {
+    try {
+      // First try members collection
+      final memberDoc = await _firestore.collection('members').doc(userId).get();
+      
+      if (memberDoc.exists) {
+        final memberData = memberDoc.data()!;
+        final duesHistory = List<Map<String, dynamic>>.from(memberData['duesHistory'] ?? []);
+        
+        if (duesIndex >= 0 && duesIndex < duesHistory.length) {
+          duesHistory[duesIndex]['status'] = 'paid';
+          duesHistory[duesIndex]['paymentDate'] = DateTime.now().toIso8601String();
+          
+          await _firestore.collection('members').doc(userId).update({
+            'duesHistory': duesHistory
+          });
+          return true;
+        }
+      } else {
+        // Try users collection
+        final userDoc = await _firestore.collection('users').doc(userId).get();
+        
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          final duesHistory = List<Map<String, dynamic>>.from(userData['duesHistory'] ?? []);
+          
+          if (duesIndex >= 0 && duesIndex < duesHistory.length) {
+            duesHistory[duesIndex]['status'] = 'paid';
+            duesHistory[duesIndex]['paymentDate'] = DateTime.now().toIso8601String();
+            
+            await _firestore.collection('users').doc(userId).update({
+              'duesHistory': duesHistory
+            });
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      print('Error marking dues as paid: $error');
+      return false;
+    }
+  }
+
+  // Get dues statistics for dashboard
+  static Future<Map<String, dynamic>> getDuesStatistics() async {
+    try {
+      final members = await getMembersWithDues();
+      
+      double totalOutstanding = 0;
+      double totalPaid = 0;
+      int membersWithDues = 0;
+      int totalDuesCount = 0;
+      int paidDuesCount = 0;
+      
+      for (var member in members) {
+        final duesHistory = member['duesHistory'] as List? ?? [];
+        bool hasUnpaidDues = false;
+        
+        for (var dues in duesHistory) {
+          totalDuesCount++;
+          final amount = (dues['amount'] as num?)?.toDouble() ?? 0;
+          
+          if (dues['status'] == 'paid') {
+            totalPaid += amount;
+            paidDuesCount++;
+          } else {
+            totalOutstanding += amount;
+            hasUnpaidDues = true;
+          }
+        }
+        
+        if (hasUnpaidDues) {
+          membersWithDues++;
+        }
+      }
+      
+      return {
+        'totalOutstanding': totalOutstanding,
+        'totalPaid': totalPaid,
+        'membersWithDues': membersWithDues,
+        'totalMembers': members.length,
+        'totalDuesCount': totalDuesCount,
+        'paidDuesCount': paidDuesCount,
+      };
+    } catch (error) {
+      print('Error getting dues statistics: $error');
+      return {
+        'totalOutstanding': 0.0,
+        'totalPaid': 0.0,
+        'membersWithDues': 0,
+        'totalMembers': 0,
+        'totalDuesCount': 0,
+        'paidDuesCount': 0,
+      };
+    }
+  }
+
+  // Approval Management Methods
+
+  // Get pending approval requests
+  static Future<List<Map<String, dynamic>>> getPendingApprovalRequests() async {
+    try {
+      List<Map<String, dynamic>> pendingRequests = [];
+      
+      // Check users collection for pending approvals
+      final usersSnapshot = await _firestore
+          .collection('users')
+          .where('isPending', isEqualTo: true)
+          .where('isApproved', isEqualTo: false)
+          .get();
+      
+      for (var doc in usersSnapshot.docs) {
+        final userData = doc.data();
+        pendingRequests.add({
+          'id': doc.id,
+          'email': userData['email'] ?? '',
+          'name': userData['name'] ?? userData['displayName'] ?? 'Unknown',
+          'createdAt': userData['createdAt'],
+          'collection': 'users',
+        });
+      }
+      
+      // Check members collection for pending approvals
+      final membersSnapshot = await _firestore
+          .collection('members')
+          .where('isPending', isEqualTo: true)
+          .where('isApproved', isEqualTo: false)
+          .get();
+      
+      for (var doc in membersSnapshot.docs) {
+        // Skip if already found in users collection
+        if (pendingRequests.any((req) => req['id'] == doc.id)) {
+          continue;
+        }
+        
+        final memberData = doc.data();
+        pendingRequests.add({
+          'id': doc.id,
+          'email': memberData['email'] ?? '',
+          'name': memberData['name'] ?? 'Unknown',
+          'createdAt': memberData['createdAt'],
+          'collection': 'members',
+        });
+      }
+      
+      // Sort by creation date (newest first)
+      pendingRequests.sort((a, b) {
+        final aTime = a['createdAt'] as Timestamp?;
+        final bTime = b['createdAt'] as Timestamp?;
+        
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        
+        return bTime.compareTo(aTime);
+      });
+      
+      return pendingRequests;
+    } catch (error) {
+      print('Error getting pending approval requests: $error');
+      return [];
+    }
+  }
+
+  // Approve user access
+  static Future<bool> approveUserAccess(String userId, String collection) async {
+    try {
+      await _firestore.collection(collection).doc(userId).update({
+        'isApproved': true,
+        'isPending': false,
+        'approvedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (error) {
+      print('Error approving user access: $error');
+      return false;
+    }
+  }
+
+  // Reject user access
+  static Future<bool> rejectUserAccess(String userId, String collection) async {
+    try {
+      await _firestore.collection(collection).doc(userId).update({
+        'isApproved': false,
+        'isPending': false,
+        'rejectedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } catch (error) {
+      print('Error rejecting user access: $error');
+      return false;
+    }
+  }
+
+  // Check if user has pending approval
+  static Future<bool> checkIfUserPendingApproval(String email) async {
+    try {
+      // Check users collection
+      final usersQuery = await _firestore
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .where('isPending', isEqualTo: true)
+          .limit(1)
+          .get();
+      
+      if (usersQuery.docs.isNotEmpty) {
+        return true;
+      }
+      
+      // Check members collection
+      final membersQuery = await _firestore
+          .collection('members')
+          .where('email', isEqualTo: email)
+          .where('isPending', isEqualTo: true)
+          .limit(1)
+          .get();
+      
+      return membersQuery.docs.isNotEmpty;
+    } catch (error) {
+      print('Error checking pending approval: $error');
       return false;
     }
   }
@@ -815,48 +1330,24 @@ class FirebaseService {
         );
       }
 
-      // Check if regular user and handle approval status
+      // Check if regular user exists
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       
       if (!userDoc.exists) {
         await _auth.signOut();
         return AdminLoginResult(
           success: false,
-          message: 'User account incomplete. Please contact administrator.',
+          message: 'User account not found. Please contact administrator.',
         );
       }
 
-      final userData = userDoc.data()!;
-      
       // Update last login for regular user
       await _firestore.collection('users').doc(user.uid).update({
         'lastLogin': FieldValue.serverTimestamp(),
         'emailVerified': user.emailVerified,
       });
 
-      // Check if user is approved
-      if (userData['isApproved'] != true) {
-        // Create/update access request
-        await _firestore.collection('accessRequests').doc(user.uid).set({
-          'email': user.email,
-          'displayName': userData['name'] ?? user.email?.split('@')[0] ?? 'Unknown',
-          'requestedAt': FieldValue.serverTimestamp(),
-          'status': 'pending',
-          'lastLogin': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        
-        // Sign out user
-        await _auth.signOut();
-        
-        return AdminLoginResult(
-          success: false,
-          isAdmin: false,
-          isPendingApproval: true,
-          message: 'Your account is pending administrator approval.',
-        );
-      }
-
-      // User is approved regular user
+      // Regular user login successful
       return AdminLoginResult(
         success: true,
         isAdmin: false,
@@ -897,96 +1388,6 @@ class FirebaseService {
 
   // ADMIN DASHBOARD METHODS
 
-  // Get pending access requests
-  static Stream<List<Map<String, dynamic>>> getPendingAccessRequests() {
-    return _firestore
-        .collection('accessRequests')
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .handleError((error) {
-      print('Error in getPendingAccessRequests: $error');
-      return [];
-    }).map((snapshot) {
-      try {
-        if (snapshot.docs.isEmpty) {
-          return <Map<String, dynamic>>[];
-        }
-        
-        final docs = snapshot.docs.map((doc) {
-          try {
-            final data = Map<String, dynamic>.from(doc.data());
-            data['id'] = doc.id;
-            return data;
-          } catch (e) {
-            print('Error processing document ${doc.id}: $e');
-            return <String, dynamic>{'id': doc.id};
-          }
-        }).where((doc) => doc.isNotEmpty).toList();
-        
-        // Sort manually to avoid index requirement
-        docs.sort((a, b) {
-          try {
-            final aTime = a['requestedAt'] as Timestamp?;
-            final bTime = b['requestedAt'] as Timestamp?;
-            if (aTime == null || bTime == null) return 0;
-            return bTime.compareTo(aTime);
-          } catch (e) {
-            return 0;
-          }
-        });
-        
-        return docs;
-      } catch (e) {
-        print('Error in getPendingAccessRequests map: $e');
-        return <Map<String, dynamic>>[];
-      }
-    });
-  }
-
-  // Approve user access
-  static Future<bool> approveUserAccess(String userId) async {
-    try {
-      // Update user approval status
-      await _firestore.collection('users').doc(userId).update({
-        'isApproved': true,
-        'approvedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Update access request status
-      await _firestore.collection('accessRequests').doc(userId).update({
-        'status': 'approved',
-        'approvedAt': FieldValue.serverTimestamp(),
-      });
-
-      return true;
-    } catch (error) {
-      print('Error approving user access: $error');
-      return false;
-    }
-  }
-
-  // Reject user access
-  static Future<bool> rejectUserAccess(String userId, {String? reason}) async {
-    try {
-      // Update access request status
-      final updateData = {
-        'status': 'rejected',
-        'rejectedAt': FieldValue.serverTimestamp(),
-      };
-      
-      if (reason != null) {
-        updateData['rejectionReason'] = reason;
-      }
-
-      await _firestore.collection('accessRequests').doc(userId).update(updateData);
-
-      return true;
-    } catch (error) {
-      print('Error rejecting user access: $error');
-      return false;
-    }
-  }
-
   // Get all users for admin management (checks both users and members collections)
   static Stream<List<Map<String, dynamic>>> getAllUsers() async* {
     try {
@@ -1025,7 +1426,6 @@ class FirebaseService {
               // Normalize field names between collections
               if (primaryCollection == 'members') {
                 // Members collection might use different field names
-                data['isApproved'] = data['isApproved'] ?? true; // Default to approved for members
                 data['isActive'] = data['isActive'] ?? true;
                 data['role'] = data['role'] ?? 'Member';
                 // Map common fields
@@ -1139,7 +1539,6 @@ class FirebaseService {
           if (data['phno'] != null) {
             data['phone'] = data['phno'];
           }
-          data['isApproved'] = data['isApproved'] ?? true;
           data['isActive'] = data['isActive'] ?? true;
           data['role'] = data['role'] ?? 'Member';
           
@@ -1198,22 +1597,8 @@ class FirebaseService {
       try {
         final combinedData = await _getCombinedUsersAndMembers();
         stats['totalUsers'] = combinedData.length;
-        stats['approvedUsers'] = combinedData
-            .where((data) => data['isApproved'] == true)
-            .length;
       } catch (e) {
         print('Error getting user stats: $e');
-      }
-
-      // Get pending access requests with error handling
-      try {
-        final pendingSnapshot = await _firestore
-            .collection('accessRequests')
-            .where('status', isEqualTo: 'pending')
-            .get();
-        stats['pendingUsers'] = pendingSnapshot.docs.length;
-      } catch (e) {
-        print('Error getting pending users: $e');
       }
 
       // Get announcements count from Realtime Database with error handling
@@ -1509,7 +1894,6 @@ class FirebaseService {
     required String name,
     String? phone,
     String role = 'Member',
-    bool isApproved = false,
     bool isActive = true,
   }) async {
     try {
@@ -1517,7 +1901,6 @@ class FirebaseService {
         'email': email,
         'name': name,
         'role': role,
-        'isApproved': isApproved,
         'isActive': isActive,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -1540,14 +1923,12 @@ class FirebaseService {
 class AdminLoginResult {
   final bool success;
   final bool isAdmin;
-  final bool isPendingApproval;
   final String message;
   final User? user;
 
   AdminLoginResult({
     required this.success,
     this.isAdmin = false,
-    this.isPendingApproval = false,
     required this.message,
     this.user,
   });

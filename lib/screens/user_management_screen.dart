@@ -75,12 +75,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       // Filter by status
       bool matchesFilter = true;
       switch (_selectedFilter) {
-        case 'Approved':
-          matchesFilter = user['isApproved'] == true;
-          break;
-        case 'Pending':
-          matchesFilter = user['isApproved'] != true;
-          break;
         case 'Active':
           matchesFilter = user['isActive'] == true;
           break;
@@ -273,7 +267,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: ['All', 'Approved', 'Pending', 'Active', 'Inactive']
+                                  children: ['All', 'Active', 'Inactive']
                   .map((filter) => _buildFilterChip(filter))
                   .toList(),
             ),
@@ -311,9 +305,8 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   Widget _buildStatsSummary() {
     final totalUsers = _allUsers.length;
-    final approvedUsers = _allUsers.where((u) => u['isApproved'] == true).length;
-    final pendingUsers = totalUsers - approvedUsers;
     final activeUsers = _allUsers.where((u) => u['isActive'] == true).length;
+    final inactiveUsers = totalUsers - activeUsers;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -333,9 +326,8 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildStatItem('Total', totalUsers.toString(), Colors.blue),
-          _buildStatItem('Approved', approvedUsers.toString(), Colors.green),
-          _buildStatItem('Pending', pendingUsers.toString(), Colors.orange),
-          _buildStatItem('Active', activeUsers.toString(), Colors.purple),
+          _buildStatItem('Active', activeUsers.toString(), Colors.green),
+          _buildStatItem('Inactive', inactiveUsers.toString(), Colors.grey),
         ],
       ),
     );
@@ -455,7 +447,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   Widget _buildUserCard(Map<String, dynamic> user, int index) {
     if (user.isEmpty) return const SizedBox.shrink();
 
-    final isApproved = user['isApproved'] ?? false;
     final isActive = user['isActive'] ?? true;
     final userName = user['name']?.toString() ?? user['email']?.toString() ?? 'Unknown';
     final userEmail = user['email']?.toString() ?? '';
@@ -489,7 +480,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                   children: [
                     CircleAvatar(
                       radius: 25,
-                      backgroundColor: isApproved ? Colors.green : Colors.orange,
+                      backgroundColor: const Color(0xFF1976D2),
                       child: Text(
                         userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
                         style: const TextStyle(
@@ -559,22 +550,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isApproved ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              isApproved ? 'Approved' : 'Pending',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isApproved ? Colors.green : Colors.orange,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+
                         ],
                       ),
                     ],
@@ -606,17 +582,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                         ],
                       ),
                     ),
-                    if (!isApproved)
-                      const PopupMenuItem(
-                        value: 'approve',
-                        child: Row(
-                          children: [
-                            Icon(Icons.check, size: 18, color: Colors.green),
-                            SizedBox(width: 8),
-                            Text('Approve'),
-                          ],
-                        ),
-                      ),
                     PopupMenuItem(
                       value: isActive ? 'deactivate' : 'activate',
                       child: Row(
@@ -682,9 +647,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       case 'edit':
         _showEditUserDialog(user);
         break;
-      case 'approve':
-        _approveUser(user['id']);
-        break;
       case 'activate':
         _toggleUserStatus(user['id'], true);
         break;
@@ -731,7 +693,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
               ),
               const SizedBox(height: 24),
               _buildDetailRow('Role', user['role']?.toString() ?? 'Member'),
-              _buildDetailRow('Status', user['isApproved'] == true ? 'Approved' : 'Pending'),
               _buildDetailRow('Active', user['isActive'] == true ? 'Yes' : 'No'),
               if (user['phone'] != null)
                 _buildDetailRow('Phone', user['phone']?.toString() ?? ''),
@@ -791,7 +752,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     final emailController = TextEditingController(text: user?['email']?.toString() ?? '');
     final phoneController = TextEditingController(text: user?['phone']?.toString() ?? '');
     String selectedRole = user?['role']?.toString() ?? 'Member';
-    bool isApproved = user?['isApproved'] ?? false;
     bool isActive = user?['isActive'] ?? true;
 
     showDialog(
@@ -846,15 +806,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                 ),
                 const SizedBox(height: 16),
                 CheckboxListTile(
-                  title: const Text('Approved'),
-                  value: isApproved,
-                  onChanged: (value) {
-                    setState(() {
-                      isApproved = value!;
-                    });
-                  },
-                ),
-                CheckboxListTile(
                   title: const Text('Active'),
                   value: isActive,
                   onChanged: (value) {
@@ -889,7 +840,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                     emailController.text,
                     phoneController.text,
                     selectedRole,
-                    isApproved,
                     isActive,
                   );
                 } else {
@@ -898,7 +848,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                     emailController.text,
                     phoneController.text,
                     selectedRole,
-                    isApproved,
                     isActive,
                   );
                 }
@@ -935,22 +884,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     );
   }
 
-  Future<void> _approveUser(String userId) async {
-    try {
-      await FirebaseService.approveUserAccess(userId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User approved successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error approving user: $e')),
-        );
-      }
-    }
-  }
+
 
   Future<void> _toggleUserStatus(String userId, bool isActive) async {
     try {
@@ -969,7 +903,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     }
   }
 
-  Future<void> _createUser(String name, String email, String phone, String role, bool isApproved, bool isActive) async {
+  Future<void> _createUser(String name, String email, String phone, String role, bool isActive) async {
     try {
       // Create user profile in Firestore with auto-generated ID
       final userId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -980,7 +914,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         name: name,
         phone: phone.isNotEmpty ? phone : null,
         role: role,
-        isApproved: isApproved,
         isActive: isActive,
       );
       
@@ -998,7 +931,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
     }
   }
 
-  Future<void> _updateUser(String userId, String name, String email, String phone, String role, bool isApproved, bool isActive) async {
+  Future<void> _updateUser(String userId, String name, String email, String phone, String role, bool isActive) async {
     try {
       await FirebaseService.updateUserProfileDetails(
         userId: userId,
@@ -1007,10 +940,6 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       );
       
       await FirebaseService.updateUserRole(userId, role);
-      
-      if (isApproved) {
-        await FirebaseService.approveUserAccess(userId);
-      }
       
       await FirebaseService.toggleUserStatus(userId, isActive);
       
